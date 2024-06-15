@@ -13,7 +13,7 @@ void *send_file(void *arg) {
     int client_sock;
     struct sockaddr_in server_addr;
     char *filename = "archivo_a_enviar.txt";
-    char *server_ip = "192.168.1.20"; // IP de la segunda computadora
+    char *server_ip = " 172.24.64.1"; // IP de la segunda computadora
 
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
