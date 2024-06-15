@@ -115,7 +115,7 @@ int main()
 			pthread_create(&client_thread, NULL, handle_client, (void *)client_socket);
 		}
 	}
-	else
+	else 
 		printf("Error\n");
 
 	return 0;
