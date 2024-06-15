@@ -1,62 +1,122 @@
+// Exercise 3 - Server Side
+
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+#include <pthread.h>
+#include <semaphore.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <arpa/inet.h>
 
-#define PORT 8080
+#define MAX_CLIENTS 10
+pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int main() {
-    int server_fd, new_socket;
-    struct sockaddr_in address;
-    int opt = 1;
-    int addrlen = sizeof(address);
-    char buffer[1024] = {0};
-    char *hello = "Hello from server";
+//array for the sockets and count the number of actual clients
+int client_sockets[MAX_CLIENTS];
+int client_count = 0;
 
-    // Crear el socket
-    if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-        perror("socket failed");
-        exit(EXIT_FAILURE);
+//send message to all the clients connected to the server
+void broadcast_message(char *message, int exclude_socket) {
+    pthread_mutex_lock(&client_mutex);
+	for (int i = 0; i < client_count; i++) {
+		//verify to dont sent the message to the client owner
+		if (client_sockets[i] != exclude_socket) {
+            send(client_sockets[i], message, strlen(message),0);
+        }
     }
+    pthread_mutex_unlock(&client_mutex);
+}
 
-    // Asociar el socket al puerto
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
-        perror("setsockopt");
-        exit(EXIT_FAILURE);
-    }
-    address.sin_family = AF_INET;
-    address.sin_addr.s_addr = inet_addr("192.168.1.10"); // Especificar la IP del servidor
-    address.sin_port = htons(PORT);
 
-    if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
-        perror("bind failed");
-        exit(EXIT_FAILURE);
-    }
+//create a new client and recive messages 
+void *handle_client(void *arg)
+{
+	int client_socket = *(int *)arg;
+	int read_size;
 
-    // Escuchar por conexiones entrantes
-    if (listen(server_fd, 3) < 0) {
-        perror("listen");
-        exit(EXIT_FAILURE);
-    }
+	// Manage communication with the client
+	while (1)
+	{
+		char buffer[1024];
+		bzero(buffer, 1024);
+		int read_size=recv(client_socket, buffer, 1024, 0);
+		
+		if(read_size>0){
+			printf("Received: %s\n", buffer);
+			broadcast_message(buffer, client_socket);
+		}
+		else
+		{
+			printf("Disconnected client\n");
+			break;
+		}
+	}
 
-    // Aceptar una conexión entrante
-    if ((new_socket = accept(server_fd, (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
-        perror("accept");
-        exit(EXIT_FAILURE);
-    }
+	
 
-    // Leer datos enviados por el cliente
-    read(new_socket, buffer, 1024);
-    printf("Message from client: %s\n", buffer);
+	close(client_socket);
+}
 
-    // Enviar respuesta al cliente
-    send(new_socket, hello, strlen(hello), 0);
-    printf("Hello message sent\n");
+int main()
+{
+	// Initialize variables
+	int serverSocket, newSocket, *client_socket;
+	struct sockaddr_in serverAddr;
+	struct sockaddr_storage serverStorage;
 
-    // Cerrar el socket
-    close(new_socket);
-    close(server_fd);
+	socklen_t addr_size;
 
-    return 0;
+	serverSocket = socket(AF_INET, SOCK_STREAM, 0);
+	serverAddr.sin_addr.s_addr = INADDR_ANY;
+	serverAddr.sin_family = AF_INET;
+	serverAddr.sin_port = htons(8000);
+
+	// Bind the socket to the address and port.
+	bind(serverSocket,
+		 (struct sockaddr *)&serverAddr,
+		 sizeof(serverAddr));
+
+	// Listen on the socket,
+	if (listen(serverSocket, 50) == 0)
+	{
+		printf("Listening\n");
+
+		while (1)
+		{
+			addr_size = sizeof(serverStorage);
+
+			// Extract the client
+			newSocket = accept(serverSocket,
+							   (struct sockaddr *)&serverStorage,
+							   &addr_size);
+
+			pthread_mutex_lock(&client_mutex);
+			if (client_count < MAX_CLIENTS)
+			{
+				//add to the clients array
+				client_sockets[client_count++] = newSocket;
+			}
+			else
+			{
+				printf("Maximum number of clients reached. Connection refused.\n");
+				close(newSocket);
+				pthread_mutex_unlock(&client_mutex);
+				continue;
+			}
+			pthread_mutex_unlock(&client_mutex);
+
+			pthread_t client_thread;
+			client_socket = malloc(sizeof(int));
+			*client_socket = newSocket;
+			//thread for handle a new client
+			pthread_create(&client_thread, NULL, handle_client, (void *)client_socket);
+		}
+	}
+	else
+		printf("Error\n");
+
+	return 0;
 }
