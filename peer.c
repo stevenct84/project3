@@ -13,6 +13,7 @@ void *send_file(void *arg) {
     int client_sock;
     struct sockaddr_in server_addr;
     char *filename = "archivo_a_enviar.txt";
+    char *server_ip = "192.168.1.20"; // IP de la segunda computadora
 
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
@@ -28,7 +29,7 @@ void *send_file(void *arg) {
 
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(PORT);
-    if (inet_pton(AF_INET, "127.0.0.1", &server_addr.sin_addr) <= 0) {
+    if (inet_pton(AF_INET, server_ip, &server_addr.sin_addr) <= 0) {
         perror("Dirección inválida/ no soportada");
         close(client_sock);
         fclose(file);
