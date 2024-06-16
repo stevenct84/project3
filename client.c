@@ -5,6 +5,8 @@
 #include <string.h>
 #include <sys/socket.h>
 
+#include <sys/ioctl.h>
+#include <net/if.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 
@@ -14,6 +16,25 @@
 
 int network_socket;
 int flag=0;//flag to finish the client
+
+void get_ip(char *iface, char *ip) {
+    int fd;
+    struct ifreq ifr;
+
+    fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+    // Specify the interface name
+    ifr.ifr_addr.sa_family = AF_INET;
+    strncpy(ifr.ifr_name, iface, IFNAMSIZ-1);
+
+    ioctl(fd, SIOCGIFADDR, &ifr);
+
+    close(fd);
+
+    // Convert the address to a string
+    strcpy(ip, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+}
+
 
 //Send message to the server
 void send_msg()
@@ -58,6 +79,8 @@ int main()
 {
     //two threads for handle send and recive messages from server
     pthread_t send_msg_thread, recv_msg_thread;
+    char server_ip[INET_ADDRSTRLEN];
+    get_ip("eth0", server_ip);
 
     // Create a stream socket
     network_socket = socket(AF_INET, SOCK_STREAM, 0);
@@ -65,7 +88,7 @@ int main()
     // Initialise port number and address
     struct sockaddr_in server_address;
     server_address.sin_family = AF_INET;
-    server_address.sin_addr.s_addr = INADDR_ANY;
+    server_address.sin_addr.s_addr = inet_addr(server_ip); 
     server_address.sin_port = htons(8000);
 
     // Initiate a socket connection
